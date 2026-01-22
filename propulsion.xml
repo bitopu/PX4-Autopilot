@@ -1,0 +1,445 @@
+<?xml version="1.0"?>
+
+<!--
+**************************************************************************
+
+Copyright (c) 2020 Simon 'bomber' Morley
+simonbomber64 at googlemail.com
+
+This work is licensed under the
+Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+To view a copy of this license,
+visit http://creativecommons.org/licenses/by-nc-sa/3.0/ or
+send a letter to Creative Commons, PO Box 1866, Mountain View, Cd 94042, USA.
+
+Attribution,  You must give appropriate credit, provide a link to the license,
+and indicate if changes were made. You may do so in any reasonable manner,
+but not in any way that suggests the licensor endorses you or your use.
+
+NonCommercial,  You may not use the material for commercial purposes.
+
+ShareAlike,  If you remix, transform, or build upon the material,
+you must distribute your contributions under the same license as the original.
+
+**************************************************************************
+-->
+
+
+<system name="Engine">
+
+<property type="double" value="0.0154138012805312">propulsion/engine[0]/rotor/gearbox_ratio</property>
+<property type="double" value="700">propulsion/tank[0]/slider-contents-lbs</property>
+<property type="double" value="700">propulsion/tank[1]/slider-contents-lbs</property>
+<property type="bool" value="0">propulsion/menu-on</property>
+<property type="double" value="0">external_reactions/rotor_main/cyclic_roll-in</property>
+<property type="double" value="0">external_reactions/rotor_main/cyclic_pitch-in</property>
+<property type="double" value="1">propulsion/engine[0]/rotor/vortex_ring</property>
+<property type="double" value="1">T4T/AGP/augmentation_factor</property>
+
+	<channel name="Turbine">
+
+		<switch name="propulsion/engine[2]/set-not-running">
+			<default value="0"/>
+			<test value="1">
+				propulsion/engine[2]/set-running eq 0
+			</test>
+		</switch>
+
+	</channel>
+
+	<channel name="Turbine Load" execute="propulsion/engine[2]/set-not-running">
+
+		<switch>
+			<default value="1"/>
+			<test value="0">
+				propulsion/engine[2]/set-not-running eq 1
+			</test>
+			<output>propulsion/engine[2]/constant-speed-mode</output>
+		</switch>
+
+		<switch>
+			<default value="0"/>
+			<test value="14">
+				propulsion/engine[2]/constant-speed-mode eq 0
+			</test>
+			<output>propulsion/engine[2]/blade-angle</output>
+		</switch>
+
+	</channel>
+
+	<channel name="Turbine Power Governor" execute="propulsion/engine[2]/set-running">
+
+		<summer>
+			<input>propulsion/engine[2]/rotor_main-hp</input>
+			<input>propulsion/engine[2]/rotor_tail-hp</input>
+			<output>propulsion/engine[2]/power_demand-hp</output>
+		</summer>
+
+		<switch>
+			<default value="0"/>
+			<test value="1">
+				propulsion/engine[2]/set-running eq 1
+			</test>
+			<output>propulsion/engine[2]/constant-speed-mode</output>
+		</switch>
+
+		<summer name="propulsion/engine[2]/power-pid/error-hp">
+			<input>propulsion/engine[2]/power-hp</input>
+			<input>-propulsion/engine[2]/power_demand-hp</input>
+		</summer>
+
+		<pid name="propulsion/engine[2]/power-pid/output">
+			<input>-propulsion/engine[2]/power-pid/error-hp</input>
+			<kp>0.0001</kp>
+			<ki>0.001</ki>
+			<kd>0.0000</kd>
+			<output>propulsion/engine[2]/power-pid/output</output>
+		</pid>
+
+		<summer>
+			<input>propulsion/engine[2]/power-pid/output</input>
+			<!-- <input>fcs/throttle-cmd-norm[2]</input>
+			<output>fcs/throttle-pos-norm[2]</output> -->
+			<input>/controls/engines/engine[2]/throttle</input>
+			<output>/controls/engines/engine[2]/throttle</output>
+		</summer>
+
+	</channel>
+
+	<channel name="Centrifugal Clutch">
+
+		<scheduled_gain>
+			<input>T4T/one</input>
+			<table>
+				<independentVar>propulsion/engine[2]/propeller-rpm</independentVar>
+				<tableData>
+			4217			0
+			5271.3			0.02
+			6325.5			0.07
+			7379.8			0.15
+			8434			0.25
+			9488.3			0.37
+			10542.5			0.5
+			11596.8			0.63
+			12651			0.75
+			13705.3			0.85
+			14759.5			0.93
+			15813.8			0.98
+			16868			1
+				</tableData>
+			</table>
+			<output>propulsion/engine[0]/rotor/clutch</output>
+		</scheduled_gain>
+
+	</channel>
+
+	<channel name="Main Rotor">
+
+		<fcs_function name="propulsion/engine[0]/rotor/main-rpm">
+			<function>
+				<product>
+					<value>0.009</value> <!-- 324/36000 -->
+					<property>propulsion/engine[0]/rotor/clutch</property>
+					<property>propulsion/engine[2]/engine-rpm</property>
+				</product>
+			</function>
+		</fcs_function>
+
+		<summer name="propulsion/engine[0]/rpm-pid/error-rpm">
+			<input>propulsion/engine[0]/engine-rpm</input>
+			<input>-propulsion/engine[0]/rotor/main-rpm</input>
+		</summer>
+
+		<pid>
+			<input>-propulsion/engine[0]/rpm-pid/error-rpm</input>
+			<kp>0.001</kp>
+			<ki>0.01</ki>
+			<kd>0.000</kd>
+			<output>propulsion/engine[0]/rpm-pid/output</output>
+		</pid>
+
+		<summer>
+			<input>propulsion/engine[0]/rpm-pid/output</input>
+			<!-- Control speed of main rotor -->
+			<input>fcs/throttle-pos-norm[0]</input>
+			<output>fcs/throttle-pos-norm[0]</output>
+			<!-- <input>/controls/engines/engine[0]/throttle</input>
+			<output>/controls/engines/engine[0]/throttle</output> -->
+		</summer>
+
+		<pure_gain>
+			<input>propulsion/engine[0]/power-hp</input> <!-- main rotor power -->
+			<gain>1.1364</gain>					<!-- gearbox losses -->
+			<output>propulsion/engine[2]/rotor_main-hp</output> <!-- turbine power demand -->
+		</pure_gain>
+
+		<fcs_function name="propulsion/engine[0]/rotor/torque_gearbox_input-lbsft">
+			<function>
+				<quotient>
+					<property>propulsion/engine[2]/power-hp</property>
+					<product>
+						<value>0.0001904</value> <!-- 1/5252 -->
+						<property>propulsion/engine[2]/propeller-rpm</property>
+					</product>
+				</quotient>
+			</function>
+		</fcs_function>
+
+		<scheduled_gain>
+			<input>T4T/one</input>
+			<table>
+				<independentVar>external_reactions/rotor_main/z</independentVar>
+				<tableData>
+				-10000			1
+				0			0
+				</tableData>
+			</table>
+			<output>propulsion/engine[0]/rotor/flex-factor</output>
+		</scheduled_gain>
+
+		<scheduled_gain>
+			<input>propulsion/engine[0]/rotor/flex-factor</input>
+			<table>
+				<independentVar>external_reactions/rotor_main/cyclic_roll-in</independentVar>
+				<tableData>
+					-60	0.2713986987			<!-- 15.55 -->
+					60	-0.2713986987			<!-- 15.55 -->
+				</tableData>
+			</table>
+			<output>propulsion/engine[0]/yaw-angle-rad</output>
+		</scheduled_gain>
+
+		<pure_gain>
+			<input>velocities/p-rad_sec</input>
+			<gain>40</gain>					<!-- arbitary value in inches -->
+			<output>external_reactions/rotor_main/damping_p-rad_sec-in</output>
+		</pure_gain>
+
+		<scheduled_gain>
+			<input>propulsion/engine[0]/rotor/flex-factor</input>
+			<table>
+				<independentVar>external_reactions/rotor_main/cyclic_pitch-in</independentVar>
+				<tableData>
+					-60	0.2713986987			<!-- 15.55 -->
+					60	-0.2713986987			<!-- 15.55 -->
+				</tableData>
+			</table>
+			<output>propulsion/engine[0]/pitch-angle-rad</output>
+		</scheduled_gain>
+
+		<summer>
+			<input>propulsion/engine[0]/pitch-angle-rad</input>
+			<bias>1.48352986419518</bias>
+			<output>propulsion/engine[0]/pitch-angle-rad</output>
+		</summer>
+
+		<pure_gain>
+			<input>velocities/q-rad_sec</input>
+			<gain>40</gain>						<!-- arbitary value in inches -->
+			<output>external_reactions/rotor_main/damping_q-rad_sec-in</output>
+		</pure_gain> 
+
+		<fcs_function>
+			<function>
+				<product>
+					<property>propulsion/engine[0]/rotor/vortex_ring</property>
+					<property>propulsion/engine[0]/rotor/clutch</property>
+					<property>propulsion/engine[0]/thrust-lbs</property>
+					<value>-100000000</value>
+				</product>
+			</function>
+			<output>propulsion/engine[0]/rotor/main-lbs</output>
+		</fcs_function>
+
+		<fcs_function>
+			<function>
+				<product>
+					<value>-1</value>
+					<property>propulsion/engine[0]/rotor/main-lbs</property>
+					<cos><property>propulsion/engine[0]/pitch-angle-rad</property></cos>
+				</product>
+			</function>
+			<output>external_reactions/rotor_main/x</output>
+		</fcs_function>
+
+		<fcs_function>
+			<function>
+				<product>
+					<property>propulsion/engine[0]/rotor/main-lbs</property>
+					<sin><property>propulsion/engine[0]/yaw-angle-rad</property></sin>
+				</product>
+			</function>
+			<output>external_reactions/rotor_main/y</output>
+		</fcs_function>
+
+		<fcs_function>
+			<function>
+				<product>
+					<property>propulsion/engine[0]/rotor/main-lbs</property>
+					<sin><property>propulsion/engine[0]/pitch-angle-rad</property></sin>
+					<cos><property>propulsion/engine[0]/yaw-angle-rad</property></cos>
+				</product>
+			</function>
+			<output>external_reactions/rotor_main/z</output>
+		</fcs_function>
+
+		<fcs_function name="propulsion/engine[0]/rotor/vertical-lbs">
+			<function>
+				<product>
+					<cos><property>attitude/pitch-rad</property></cos>
+					<cos><property>attitude/roll-rad</property></cos>
+					<property>external_reactions/rotor_main/z</property>
+				</product>
+			</function>
+		</fcs_function>
+
+		<scheduled_gain name="propulsion/engine[0]/rotor/ground_effect-lbs">
+			<input>propulsion/engine[0]/rotor/vertical-lbs</input>
+			<table>
+				<independentVar lookup="row">position/h-agl-ft</independentVar>
+				<independentVar lookup="column">velocities/vg-fps</independentVar>
+				<tableData>
+						0		8.44
+					1.83	0.5		0.00	<!-- 1/8 -->
+					3.66	0.15		0.00	<!-- 1/4 -->
+					7.32	0.07		0.00	<!-- 1/2 -->
+					10.97	0.025		0.00	<!-- 3/4 -->
+					14.63	0.02		0.00	<!-- 1 -->
+					18.29	0.005		0.00	<!-- 1 1/4 -->
+					21.95	0		0.00	<!-- 1 1/2 -->
+				</tableData>
+			</table>
+			<output>external_reactions/ground_effect/z</output>
+		</scheduled_gain>
+
+	</channel>
+
+	<channel name="Tail Rotor">
+
+		<fcs_function name="propulsion/engine[1]/rotor/tail-rpm">
+			<function>
+				<product>
+					<value>0.0495</value> <!-- 1782/36000 -->
+					<property>propulsion/engine[0]/rotor/clutch</property>
+					<property>propulsion/engine[2]/engine-rpm</property>
+				</product>
+			</function>
+		</fcs_function>
+
+		<summer name="propulsion/engine[1]/rpm-pid/error-rpm">
+			<input>propulsion/engine[1]/engine-rpm</input>
+			<input>-propulsion/engine[1]/rotor/tail-rpm</input>
+		</summer>
+
+		<pid>
+			<input>-propulsion/engine[1]/rpm-pid/error-rpm</input>
+			<kp>0.0001</kp>
+			<ki>0.0001</ki>
+			<kd>0.000</kd>
+			<output>propulsion/engine[1]/rpm-pid/output</output>
+		</pid>
+
+		<summer>
+			<input>propulsion/engine[1]/rpm-pid/output</input>
+			<input>fcs/throttle-pos-norm[1]</input>
+			<output>fcs/throttle-pos-norm[1]</output>
+			<!-- <input>/controls/engines/engine[1]/throttle</input>
+			<output>/controls/engines/engine[1]/throttle</output> -->
+		</summer>
+
+		<pure_gain>
+			<input>propulsion/engine[1]/power-hp</input> <!-- tail rotor power -->
+			<gain>1.25</gain>					<!-- drivetrain losses -->
+			<output>propulsion/engine[2]/rotor_tail-hp</output> <!-- turbine power demand -->
+		</pure_gain>
+
+		<summer name="propulsion/engine[1]/blade_angle-pid/error-lbsft">
+			<input>moments/n-prop-lbsft</input>
+			<input>T4T/AGP/PID/anti-torque/target</input>
+		</summer>
+				
+		<pure_gain>
+			<input>propulsion/engine[1]/blade_angle-pid/error-lbsft</input> 
+			<gain>0.000001</gain>
+			<output>propulsion/engine[1]/blade_angle-pid/output</output>
+		</pure_gain>		
+
+<!-- 		<pid>
+			<input>propulsion/engine[1]/blade_angle-pid/error-lbsft</input>
+			<kp>0.000001</kp>
+			<ki>0.0</ki>
+			<kd>0.000001</kd>
+			<output>propulsion/engine[1]/blade_angle-pid/output</output>
+		</pid> -->
+
+		<summer>
+			<input>propulsion/engine[1]/blade_angle-pid/output</input>
+			<input>propulsion/engine[1]/blade-angle-auto</input>
+			<clipto>
+				<min>-6.1</min>
+				<max>4.3</max>
+			</clipto>
+			<output>propulsion/engine[1]/blade-angle-auto</output>
+		</summer>
+
+		<pure_gain>
+			<input>propulsion/engine[1]/blade-angle-auto</input> 
+			<gain>T4T/AGP/augmentation_factor</gain>
+			<output>propulsion/engine[1]/blade-angle-auto</output>
+		</pure_gain>		
+
+	</channel>
+
+	<channel name="Fuel Adjust">
+
+	<!-- Tank 0 -->
+
+		<summer>
+			<input>propulsion/tank[0]/contents-lbs</input>
+			<input>-propulsion/tank[0]/slider-contents-lbs</input>
+			<output>propulsion/tank[0]/error_contents-lbs</output>
+		</summer>
+
+		<pid>
+			<input>-propulsion/tank[0]/error_contents-lbs</input>
+			<kp>0.2</kp>
+			<ki>0</ki>
+			<kd>0.1</kd>
+			<output>propulsion/tank[0]/external-flow-rate-pps</output>
+		</pid>
+
+		<switch>
+			<default value="0"/>
+			<test value="propulsion/tank[0]/external-flow-rate-pps">
+				propulsion/menu-on eq 0
+			</test>
+			<output>propulsion/tank[0]/external-flow-rate-pps</output>
+		</switch>
+
+	<!-- Tank 1 -->
+
+		<summer>
+			<input>propulsion/tank[1]/contents-lbs</input>
+			<input>-propulsion/tank[1]/slider-contents-lbs</input>
+			<output>propulsion/tank[1]/error_contents-lbs</output>
+		</summer>
+
+		<pid>
+			<input>-propulsion/tank[1]/error_contents-lbs</input>
+			<kp>0.2</kp>
+			<ki>0</ki>
+			<kd>0.1</kd>
+			<output>propulsion/tank[1]/external-flow-rate-pps</output>
+		</pid>
+
+		<switch>
+			<default value="0"/>
+			<test value="propulsion/tank[1]/external-flow-rate-pps">
+				propulsion/menu-on eq 0
+			</test>
+			<output>propulsion/tank[1]/external-flow-rate-pps</output>
+		</switch>
+
+	</channel>
+
+</system>
