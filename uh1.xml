@@ -1,0 +1,69 @@
+<model name="uh1">
+    <jsbsimbridge>
+        <aircraft_directory>models/uh1</aircraft_directory>
+        <aircraft_model>uh1</aircraft_model>
+    </jsbsimbridge>
+    <mavlink_interface>
+        <tcp_port>4560</tcp_port>
+    </mavlink_interface>
+    <sensors>
+        <imu>
+        </imu>
+        <gps>
+        </gps>
+        <barometer>
+        </barometer>
+        <magnetometer>
+        </magnetometer>
+        <airspeed>
+        </airspeed>
+    </sensors>
+    <actuators>
+        <channel name="roll">
+            <index>4</index>
+            <scale>1</scale>
+            <property>fcs/swash-servo-0</property>
+        </channel>
+        <channel name="pitch">
+            <index>5</index>
+            <scale>1</scale>
+            <property>fcs/swash-servo-120</property>
+        </channel>
+
+        <channel name="collective">
+            <index>6</index>
+            <scale>1</scale>
+            <property>fcs/swash-servo-240</property>
+        </channel>
+        <channel name="yaw">
+            <index>3</index>
+            <scale>-1</scale>
+            <property>fcs/rudder-cmd-norm</property>
+        </channel>
+        <channel name="throttle">
+            <index>2</index>
+            <scale>1</scale>
+            <property>fcs/throttle-cmd-norm[2]</property>
+        </channel>
+    </actuators>
+    <buttons>
+        <button> 
+            <index>6</index>
+            <property>propulsion/active_engine</property>
+            <on_value>2</on_value>
+            <off_value>0</off_value>
+        </button>
+        <button>
+            <index>7</index>
+            <property>propulsion/starter_cmd</property>
+            <on_value>1</on_value>
+            <off_value>0</off_value>
+        </button>
+        <button>
+            <index>8</index>
+            <property>propulsion/cutoff_cmd</property>
+            <on_value>1</on_value>
+            <off_value>0</off_value>
+        </button>
+    </buttons>
+</model>
